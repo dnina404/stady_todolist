@@ -11,6 +11,10 @@ type TaskDTO struct {
 	Description string
 }
 
+type BoolDTO struct {
+	Completed bool `json:"completed"`
+}
+
 func (t TaskDTO) ValidateForCreate() error {
 	if t.Title == "" {
 		return errors.New("title is empty")

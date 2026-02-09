@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"restapi/todo"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -122,9 +123,9 @@ func (h *HTTPHeandlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-pattern: /tasks
+pattern: /tasks?completed=true/false/nil
 method: GET
-info:	-
+info:   query params
 
 succeed:
   - status code: 200 Ok
@@ -135,34 +136,20 @@ failed:
   - responce body: JSON with error + time
 */
 func (h *HTTPHeandlers) HandleGetAllTasks(w http.ResponseWriter, r *http.Request) {
-	tasks := h.todoList.ListTasks()
-	b, err := json.MarshalIndent(tasks, "", "    ")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+	completedStr := r.URL.Query().Get("completed")
+
+	var completed *bool
+	if completedStr != "" {
+		val, err := strconv.ParseBool(completedStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		completed = &val
 	}
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(b); err != nil {
-		fmt.Println("failed to write http response", err)
-		return
-	}
-}
 
-/*
-pattern: /tasks?completed=true
-method: GET
-info:   query params
+	tasks := h.todoList.ListTasks(completed)
 
-succeed:
-  - status code: 200 Ok
-  - responce body: JSON represent found tasks
-
-failed:
-  - status code: 400, 500
-  - responde body: JSON with error + time
-*/
-func (h *HTTPHeandlers) HandleGetUncompletedTasks(w http.ResponseWriter, r *http.Request) {
-	tasks := h.todoList.ListNotCompletedTasks()
 	b, err := json.MarshalIndent(tasks, "", "    ")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -189,8 +176,8 @@ failed:
   - responde body: JSON with error + time
 */
 func (h *HTTPHeandlers) HandleCompleteTask(w http.ResponseWriter, r *http.Request) {
-	var completeDTO CompleteTaskDTO
-	if err := json.NewDecoder(r.Body).Decode(&completeDTO); err != nil {
+	var boolDTO BoolDTO
+	if err := json.NewDecoder(r.Body).Decode(&boolDTO); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -200,25 +187,20 @@ func (h *HTTPHeandlers) HandleCompleteTask(w http.ResponseWriter, r *http.Reques
 		fmt.Println("BadRequest")
 		return
 	}
-	if completeDTO.Complete {
-		if err := h.todoList.CompleteTask(title); err != nil {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-	}
 
-	if !completeDTO.Complete {
-		if err := h.todoList.UnCompleteTask(title); err != nil {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-	}
 	task, err := h.todoList.GetTask(title)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		if errors.Is(err, todo.ErrTaskNotFound) {
+			writeError(w, http.StatusNotFound, err)
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
+		}
+
 		return
 	}
-	b, err := json.MarshalIndent(task, "", "    ")
+	Task := h.todoList.CompletesTask(task, title, boolDTO.Completed)
+
+	b, err := json.MarshalIndent(Task, "", "    ")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
