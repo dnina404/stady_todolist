@@ -25,7 +25,6 @@ func (l *List) GetTask(title string) (Task, error) {
 func (l *List) AddTask(task Task) error {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
-
 	if _, ok := l.tasks[task.Title]; ok {
 		return ErrTaskAlreadyExists
 	}
@@ -35,6 +34,9 @@ func (l *List) AddTask(task Task) error {
 	return nil
 }
 func (l *List) CompletesTask(t Task, title string, b bool) Task {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+
 	task := l.tasks[title]
 	if b == true {
 		task.Complete()
